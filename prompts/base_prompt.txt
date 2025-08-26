@@ -1,7 +1,0 @@
-Answer the user’s question using the following context from research papers:
-
-{context}
-
-Question: {question}
-
-Answer:

@@ -1,9 +1,0 @@
-streamlit
-openai
-langchain
-arxiv
-chromadb
-python-dotenv
-PyPDF2
-tiktoken
-matplotlib
