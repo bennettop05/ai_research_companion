@@ -1,7 +1,6 @@
-import os
 import streamlit as st
-from dotenv import load_dotenv
 from openai import OpenAI
+import os
 
 # local modules
 from modules.arxiv_loader import fetch_arxiv_pdf
@@ -10,13 +9,12 @@ from modules.memory_manager import ConversationMemory
 from logs.feedback_logger import log_feedback
 from logs.trace_logger import log_trace
 
-# ---- Env & Client ----
-load_dotenv()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct")
+# ---- Streamlit Secrets ----
+OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+OPENROUTER_MODEL = st.secrets.get("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct")
 
 if not OPENROUTER_API_KEY:
-    st.error("❌ Missing OPENROUTER_API_KEY in .env")
+    st.error("❌ Missing OPENROUTER_API_KEY in Streamlit Secrets")
     st.stop()
 
 client = OpenAI(
@@ -50,7 +48,6 @@ user_question = st.text_input("Your question")
 
 if user_question:
     with st.spinner("Thinking..."):
-        # fetch more context (larger window for richer answers)
         context = query_rag(user_question, top_k=15)
 
         system_prompt = (
@@ -81,10 +78,9 @@ Final Answer:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.4,
-                max_tokens=1200,   # ⬆ longer answers
+                max_tokens=1200,
             )
 
-            # ✅ Safe extraction
             if response and response.choices and response.choices[0].message:
                 answer = response.choices[0].message.content.strip()
             else:
@@ -108,7 +104,6 @@ Final Answer:
                 st.warning("We'll try to improve.")
 
         except Exception:
-            # ❌ silently ignore model errors (no red scary box)
             pass
 
 # ---- Show Memory ----
