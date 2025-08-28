@@ -1,15 +1,16 @@
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
 import os
+import pickle
 
 # Lightweight embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-def load_and_embed_pdf(pdf_path, persist_dir="db/", chunk_size=800, chunk_overlap=100):
+def load_and_embed_pdf(pdf_path, faiss_index_path="db/faiss_index", chunk_size=800, chunk_overlap=100):
     """
-    Load a PDF, split it into chunks, embed them, and store in a persistent vector DB.
+    Load a PDF, split it into chunks, embed them, and store in FAISS vector DB.
     """
     # Load PDF pages
     loader = PyPDFLoader(pdf_path)
@@ -19,25 +20,32 @@ def load_and_embed_pdf(pdf_path, persist_dir="db/", chunk_size=800, chunk_overla
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     chunks = splitter.split_documents(pages)
 
-    # Ensure the vector DB directory exists
-    os.makedirs(persist_dir, exist_ok=True)
+    # Create FAISS vector DB
+    vectordb = FAISS.from_documents(chunks, embeddings)
 
-    # Create Chroma vector DB and persist
-    vectordb = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=persist_dir
-    )
-    vectordb.persist()
+    # Save FAISS index (binary + metadata)
+    os.makedirs(os.path.dirname(faiss_index_path), exist_ok=True)
+    faiss_index_file = faiss_index_path + ".pkl"
+    with open(faiss_index_file, "wb") as f:
+        pickle.dump(vectordb, f)
+
     return vectordb
 
-def query_rag(question, persist_dir="db/", top_k=15):
+
+def query_rag(question, faiss_index_path="db/faiss_index", top_k=15):
     """
-    Query the persistent RAG vector store and return top_k relevant chunks.
+    Query the FAISS vector store and return top_k relevant chunks.
     """
-    vectordb = Chroma(persist_directory=persist_dir, embedding_function=embeddings)
-    retriever = vectordb.as_retriever()
+    faiss_index_file = faiss_index_path + ".pkl"
+    if not os.path.exists(faiss_index_file):
+        raise FileNotFoundError("FAISS index not found. Run load_and_embed_pdf first.")
+
+    # Load FAISS index
+    with open(faiss_index_file, "rb") as f:
+        vectordb = pickle.load(f)
+
+    retriever = vectordb.as_retriever(search_kwargs={"k": top_k})
     docs = retriever.get_relevant_documents(question)
 
-    # Return top_k results as combined context
-    return "\n\n".join([doc.page_content for doc in docs[:top_k]])
+    # Return combined context
+    return "\n\n".join([doc.page_content for doc in docs])
