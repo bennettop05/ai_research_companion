@@ -10,3 +10,4 @@ sentence-transformers
 requests
 pypdf
 chromadb
+faiss-cpu
